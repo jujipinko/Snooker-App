@@ -1,1 +1,308 @@
+import SwiftUI
+import UIKit
+import RealityKit
+import ARKit
 
+struct GameOverMessage: Identifiable {
+    let id = UUID()
+    let message: String
+}
+
+struct ContentView: View {
+    @State private var yordanScore = ""
+    @State private var nikolayScore = ""
+    @State private var winner = "Enter scores to see the winner"
+    @State private var yordanFrames = UserDefaults.standard.integer(forKey: "yordanFrames")
+    @State private var nikolayFrames = UserDefaults.standard.integer(forKey: "nikolayFrames")
+    @State private var gameOverMessage: GameOverMessage? = nil
+    @State private var scoreHistory: [String] = UserDefaults.standard.stringArray(forKey: "scoreHistory") ?? []
+    @State private var showingScoreHistory = false
+    @State private var currentBreaker = "Yordan Kozarev to break"
+    @State private var yordanMatchWins = UserDefaults.standard.integer(forKey: "yordanMatchWins")
+    @State private var nikolayMatchWins = UserDefaults.standard.integer(forKey: "nikolayMatchWins")
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                VStack(spacing: 10) {
+                    Text("Snooker Scoreboard")
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundColor(.white)
+
+                    Text(currentBreaker)
+                        .foregroundColor(.white)
+                        .font(.system(size: 22, weight: .bold))
+                        .padding()
+
+                    HStack {
+                        VStack {
+                            Text("Yordan's Score")
+                                .foregroundColor(.green)
+                                .font(.system(size: 18))
+                            TextField("Enter score", text: $yordanScore)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .keyboardType(.numberPad)
+                                .padding()
+                        }
+
+                        VStack {
+                            Text("Nikolay's Score")
+                                .foregroundColor(.green)
+                                .font(.system(size: 18))
+                            TextField("Enter score", text: $nikolayScore)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .keyboardType(.numberPad)
+                                .padding()
+                        }
+                    }
+
+                    Button(action: {
+                        calculateWinner()
+                        hideKeyboard()
+                    }) {
+                        Text("Calculate Winner")
+                            .foregroundColor(.black)
+                            .padding()
+                            .background(Color.green)
+                            .cornerRadius(5)
+                            .font(.system(size: 18))
+                    }
+
+                    Button(action: { showingScoreHistory.toggle() }) {
+                        Text("Show Score History")
+                            .foregroundColor(.black)
+                            .padding()
+                            .background(Color.blue)
+                            .cornerRadius(10)
+                            .font(.system(size: 18))
+                    }
+
+                    Button(action: {
+                        let shareText = scoreHistory.joined(separator: "\n\n")
+                        if !shareText.isEmpty {
+                            UIPasteboard.general.string = shareText
+                        }
+                    }) {
+                        Text("Copy All Results")
+                            .foregroundColor(.black)
+                            .padding()
+                            .background(Color.orange)
+                            .cornerRadius(10)
+                            .font(.system(size: 18))
+                    }
+
+                    Button(action: resetGame) {
+                        Text("Reset Game")
+                            .foregroundColor(.black)
+                            .padding()
+                            .background(Color.red)
+                            .cornerRadius(10)
+                            .font(.system(size: 18))
+                    }
+
+                    NavigationLink(destination: ARScoreboardView()) {
+                        Text("Show AR Scoreboard")
+                            .foregroundColor(.black)
+                            .padding()
+                            .background(Color.purple)
+                            .cornerRadius(10)
+                            .font(.system(size: 18))
+                    }
+
+                    Text("Winner: \(winner)")
+                        .foregroundColor(.green)
+                        .font(.system(size: 20))
+                        .padding()
+
+                    Text("Yordan Kozarev \(yordanFrames) (35) \(nikolayFrames) Nikolay Markov")
+                        .foregroundColor(.white)
+                        .font(.system(size: 18))
+                        .padding()
+
+                    VStack {
+                        Text("Match Wins:")
+                            .foregroundColor(.white)
+                            .font(.system(size: 18, weight: .bold))
+
+                        HStack {
+                            Text("Yordan")
+                                .foregroundColor(.white)
+                                .bold()
+                                .frame(maxWidth: .infinity)
+                            Text("\(yordanMatchWins)")
+                                .foregroundColor(.white)
+                                .bold()
+                                .frame(maxWidth: .infinity)
+                            Text("-")
+                                .foregroundColor(.white)
+                                .bold()
+                                .frame(maxWidth: .infinity)
+                            Text("\(nikolayMatchWins)")
+                                .foregroundColor(.white)
+                                .bold()
+                                .frame(maxWidth: .infinity)
+                            Text("Nikolay")
+                                .foregroundColor(.white)
+                                .bold()
+                                .frame(maxWidth: .infinity)
+                        }
+                        .padding(.top, 1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                }
+                .padding()
+                .alert(item: $gameOverMessage) { gameOver in
+                    Alert(title: Text("Game Over"), message: Text(gameOver.message), dismissButton: .default(Text("OK")))
+                }
+                .sheet(isPresented: $showingScoreHistory) {
+                    ScoreHistoryView(scoreHistory: scoreHistory, showingScoreHistory: $showingScoreHistory)
+                }
+            }
+            .onAppear {
+                yordanFrames = UserDefaults.standard.integer(forKey: "yordanFrames")
+                nikolayFrames = UserDefaults.standard.integer(forKey: "nikolayFrames")
+                scoreHistory = UserDefaults.standard.stringArray(forKey: "scoreHistory") ?? []
+                yordanMatchWins = UserDefaults.standard.integer(forKey: "yordanMatchWins")
+                nikolayMatchWins = UserDefaults.standard.integer(forKey: "nikolayMatchWins")
+            }
+        }
+    }
+
+    func calculateWinner() {
+        // Проверка за валидни числа
+        guard let yScore = Int(yordanScore), let nScore = Int(nikolayScore) else {
+            winner = "Invalid input!"
+            return
+        }
+
+        // Определяне на победителя
+        if yScore > nScore {
+            winner = "Yordan Kozarev"
+            yordanFrames += 1
+        } else {
+            winner = "Nikolay Markov"
+            nikolayFrames += 1
+        }
+
+        // Смяна на разбиващия играч
+        currentBreaker = (currentBreaker == "Yordan Kozarev to break") ? "Nikolay Markov to break" : "Yordan Kozarev to break"
+
+        // Нулиране на полетата за резултат
+        yordanScore = ""
+        nikolayScore = ""
+
+        // Добавяне на резултата към историята
+        let frameResult = "Frame results:\nYordan's score: \(yScore)\nNikolay's score: \(nScore)\nWinner: \(winner)"
+        let detailedResult = "Yordan Kozarev \(yordanFrames) (35) \(nikolayFrames) Nikolay Markov"
+        scoreHistory.append(frameResult)
+        scoreHistory.append(detailedResult)
+
+        // Запис в основния UserDefaults (на приложението)
+        UserDefaults.standard.set(yordanFrames, forKey: "yordanFrames")
+        UserDefaults.standard.set(nikolayFrames, forKey: "nikolayFrames")
+        UserDefaults.standard.set(scoreHistory, forKey: "scoreHistory")
+
+        // Проверка за спечелен мач
+        if yordanFrames == 18 {
+            yordanMatchWins += 1
+            gameOverMessage = GameOverMessage(message: "Yordan Kozarev wins the match!")
+        } else if nikolayFrames == 18 {
+            nikolayMatchWins += 1
+            gameOverMessage = GameOverMessage(message: "Nikolay Markov wins the match!")
+        }
+
+        // Запис на мач победите
+        UserDefaults.standard.set(yordanMatchWins, forKey: "yordanMatchWins")
+        UserDefaults.standard.set(nikolayMatchWins, forKey: "nikolayMatchWins")
+
+        // ✅ ДОБАВЕНО: Записване и в App Group (за widget-a)
+        let shared = UserDefaults(suiteName: "com.mclimate.snooker.SnookerGame") // <-- смени с твоето реално име на групата
+        shared?.set(yordanFrames, forKey: "yordanFrames")
+        shared?.set(nikolayFrames, forKey: "nikolayFrames")
+    }
+
+    func resetGame() {
+        yordanScore = ""
+        nikolayScore = ""
+        winner = "Enter scores to see the winner"
+        yordanFrames = 0
+        nikolayFrames = 0
+        scoreHistory.removeAll()
+        UserDefaults.standard.removeObject(forKey: "scoreHistory")
+        UserDefaults.standard.set(yordanFrames, forKey: "yordanFrames")
+        UserDefaults.standard.set(nikolayFrames, forKey: "nikolayFrames")
+        yordanMatchWins = 0
+        nikolayMatchWins = 0
+        UserDefaults.standard.set(yordanMatchWins, forKey: "yordanMatchWins")
+        UserDefaults.standard.set(nikolayMatchWins, forKey: "nikolayMatchWins")
+    }
+
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+
+struct ScoreHistoryView: View {
+    let scoreHistory: [String]
+    @Binding var showingScoreHistory: Bool
+
+    var body: some View {
+        NavigationView {
+            List {
+                ForEach(scoreHistory, id: \.self) { score in
+                    Text(score)
+                        .foregroundColor(.white)
+                        .font(.system(size: 16))
+                }
+            }
+            .navigationTitle("Score History")
+            .background(Color.black)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Close") {
+                        showingScoreHistory = false
+                    }
+                    .foregroundColor(.white)
+                }
+            }
+        }
+        .accentColor(.black)
+        .background(Color.black)
+    }
+}
+
+struct ARScoreboardView: View {
+    var body: some View {
+        ARViewContainer().edgesIgnoringSafeArea(.all)
+    }
+}
+
+struct ARViewContainer: UIViewRepresentable {
+    func makeUIView(context: Context) -> ARView {
+        let arView = ARView(frame: .zero)
+        let textMesh = MeshResource.generateText("Yordan 3 - 2 Nikolay", extrusionDepth: 0.02, font: .systemFont(ofSize: 0.2))
+        let material = SimpleMaterial(color: .green, isMetallic: false)
+        let entity = ModelEntity(mesh: textMesh, materials: [material])
+        entity.position = SIMD3(x: 0, y: 0.1, z: -0.5)
+
+        let anchor = AnchorEntity(plane: .horizontal)
+        anchor.addChild(entity)
+        arView.scene.anchors.append(anchor)
+
+        let config = ARWorldTrackingConfiguration()
+        config.planeDetection = [.horizontal]
+        arView.session.run(config, options: [])
+
+        return arView
+    }
+
+    func updateUIView(_ uiView: ARView, context: Context) {}
+}
+
+#Preview {
+    ContentView()
+}
